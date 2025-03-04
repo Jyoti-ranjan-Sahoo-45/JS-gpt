@@ -5,25 +5,82 @@ const promptInput = promptForm.querySelector(".prompt-input");
 const fileInput = promptForm.querySelector("#file-input");
 const fileUploadWrapper = promptForm.querySelector(".file-upload-wrapper");
 const themeToggleBtn = document.querySelector("#theme-toggle-btn");
+
 // API Setup
 const API_KEY = "AIzaSyAmgLBOwqIcZkbrI6QQuMEVQbRNegJlM-o";
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
 let controller, typingInterval;
 const chatHistory = [];
 const userData = { message: "", file: {} };
+
+// Create side scroll button for mobile
+const createSideScrollButton = () => {
+  const sideScrollBtn = document.createElement("button");
+  sideScrollBtn.id = "side-scroll-btn";
+  sideScrollBtn.classList.add("material-symbols-rounded", "side-scroll-btn");
+  sideScrollBtn.textContent = "swipe";
+  sideScrollBtn.title = "Toggle horizontal scroll";
+  document.querySelector(".prompt-wrapper").appendChild(sideScrollBtn);
+  
+  sideScrollBtn.addEventListener("click", () => {
+    container.classList.toggle("mobile-scroll");
+    sideScrollBtn.textContent = container.classList.contains("mobile-scroll") ? "swipe_right" : "swipe";
+  });
+};
+
+// Create copy notification toast
+const createCopyToast = () => {
+  const toast = document.createElement("div");
+  toast.classList.add("copy-toast");
+  toast.textContent = "Copied to clipboard!";
+  document.body.appendChild(toast);
+  return toast;
+};
+
 // Set initial theme from local storage
 const isLightTheme = localStorage.getItem("themeColor") === "light_mode";
 document.body.classList.toggle("light-theme", isLightTheme);
 themeToggleBtn.textContent = isLightTheme ? "dark_mode" : "light_mode";
+
+// Create side scroll button and copy toast
+createSideScrollButton();
+const copyToast = createCopyToast();
+
 // Function to create message elements
 const createMessageElement = (content, ...classes) => {
   const div = document.createElement("div");
   div.classList.add("message", ...classes);
   div.innerHTML = content;
+  
+  // Add copy button for bot messages
+  if (classes.includes("bot-message")) {
+    setTimeout(() => {
+      const textElement = div.querySelector(".message-text");
+      if (textElement) {
+        const copyBtn = document.createElement("button");
+        copyBtn.classList.add("copy-btn");
+        copyBtn.innerHTML = '<span class="material-symbols-rounded">content_copy</span>';
+        copyBtn.addEventListener("click", () => copyMessageText(textElement));
+        textElement.appendChild(copyBtn);
+      }
+    }, 100);
+  }
+  
   return div;
 };
+
+// Copy message text to clipboard
+const copyMessageText = (textElement) => {
+  const text = textElement.textContent.replace(/content_copy/g, "").trim();
+  navigator.clipboard.writeText(text).then(() => {
+    copyToast.classList.add("show");
+    setTimeout(() => copyToast.classList.remove("show"), 2000);
+  }).catch(err => console.error("Failed to copy text: ", err));
+};
+
 // Scroll to the bottom of the container
 const scrollToBottom = () => container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+
 // Simulate typing effect for bot responses
 const typingEffect = (text, textElement, botMsgDiv) => {
   textElement.textContent = "";
@@ -38,9 +95,17 @@ const typingEffect = (text, textElement, botMsgDiv) => {
       clearInterval(typingInterval);
       botMsgDiv.classList.remove("loading");
       document.body.classList.remove("bot-responding");
+      
+      // Add copy button after typing is complete
+      const copyBtn = document.createElement("button");
+      copyBtn.classList.add("copy-btn");
+      copyBtn.innerHTML = '<span class="material-symbols-rounded">content_copy</span>';
+      copyBtn.addEventListener("click", () => copyMessageText(textElement));
+      textElement.appendChild(copyBtn);
     }
   }, 40); // 40 ms delay
 };
+
 // Make the API call and generate the bot's response
 const generateResponse = async (botMsgDiv) => {
   const textElement = botMsgDiv.querySelector(".message-text");
@@ -74,6 +139,7 @@ const generateResponse = async (botMsgDiv) => {
     userData.file = {};
   }
 };
+
 // Handle the form submission
 const handleFormSubmit = (e) => {
   e.preventDefault();
@@ -101,6 +167,7 @@ const handleFormSubmit = (e) => {
     generateResponse(botMsgDiv);
   }, 600); // 600 ms delay
 };
+
 // Handle file input change (file upload)
 fileInput.addEventListener("change", () => {
   const file = fileInput.files[0];
@@ -117,11 +184,13 @@ fileInput.addEventListener("change", () => {
     userData.file = { fileName: file.name, data: base64String, mime_type: file.type, isImage };
   };
 });
+
 // Cancel file upload
 document.querySelector("#cancel-file-btn").addEventListener("click", () => {
   userData.file = {};
   fileUploadWrapper.classList.remove("file-attached", "img-attached", "active");
 });
+
 // Stop Bot Response
 document.querySelector("#stop-response-btn").addEventListener("click", () => {
   controller?.abort();
@@ -130,18 +199,21 @@ document.querySelector("#stop-response-btn").addEventListener("click", () => {
   chatsContainer.querySelector(".bot-message.loading").classList.remove("loading");
   document.body.classList.remove("bot-responding");
 });
+
 // Toggle dark/light theme
 themeToggleBtn.addEventListener("click", () => {
   const isLightTheme = document.body.classList.toggle("light-theme");
   localStorage.setItem("themeColor", isLightTheme ? "light_mode" : "dark_mode");
   themeToggleBtn.textContent = isLightTheme ? "dark_mode" : "light_mode";
 });
+
 // Delete all chats
 document.querySelector("#delete-chats-btn").addEventListener("click", () => {
   chatHistory.length = 0;
   chatsContainer.innerHTML = "";
   document.body.classList.remove("chats-active", "bot-responding");
 });
+
 // Handle suggestions click
 document.querySelectorAll(".suggestions-item").forEach((suggestion) => {
   suggestion.addEventListener("click", () => {
@@ -149,12 +221,14 @@ document.querySelectorAll(".suggestions-item").forEach((suggestion) => {
     promptForm.dispatchEvent(new Event("submit"));
   });
 });
+
 // Show/hide controls for mobile on prompt input focus
 document.addEventListener("click", ({ target }) => {
   const wrapper = document.querySelector(".prompt-wrapper");
   const shouldHide = target.classList.contains("prompt-input") || (wrapper.classList.contains("hide-controls") && (target.id === "add-file-btn" || target.id === "stop-response-btn"));
   wrapper.classList.toggle("hide-controls", shouldHide);
 });
+
 // Add event listeners for form submission and file input click
 promptForm.addEventListener("submit", handleFormSubmit);
 promptForm.querySelector("#add-file-btn").addEventListener("click", () => fileInput.click());
